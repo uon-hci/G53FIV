@@ -8,9 +8,13 @@ planets = read.csv("data_sets/NASA/planets.csv")
 planets_number = nrow(planets)
 message(sprintf("[INFO] %d planets loaded", planets_number))
 
-# Plot
-g = ggplot(planets, aes(x = pl_discmethod, y = pl_bmassj)) + 
-    geom_bar(stat="identity") + 
-    scale_colour_brewer(palette = "Set2") + 
-    labs(title="Discovery methods", subtitle="For planet discovery", x = "Methods", y = "Quantity", caption = "Planet discovery methods")
+# PLANETS MASS/SIZE VISUALIZATION
+# Filter
+planets.mass_radius = subset(planets[c("pl_letter", "pl_bmassj", "pl_radj")], !(is.na(pl_bmassj) | is.na(pl_radj)))
+message(sprintf("[INFO] %d planets with mass and radius info filtered", nrow(planets.mass_radius)))
+# Plotting
+g = ggplot(planets.mass_radius, aes(pl_radj, pl_bmassj)) +
+    geom_point(aes(colour = pl_letter, size = pl_radj)) +
+    coord_cartesian(ylim=c(0, 22)) +
+    theme_minimal()
 plot(g)
