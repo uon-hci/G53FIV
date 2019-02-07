@@ -1,4 +1,5 @@
 # Loading packages
+library("futile.logger")
 library("ggplot2")
 
 # Loading planets
