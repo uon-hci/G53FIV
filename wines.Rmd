@@ -1,0 +1,253 @@
+---
+title: "An exploration of the world's wines"
+author: "Andy Pagès"
+date: "2018-03-20"
+output: pdf_document
+---
+
+# Introduction 
+
+Wine is a famous alcoholic drink made from fermented grapes that has been produced for thousands of years. The process to create wine 
+is very complex and vary from one place of the world to another. Using a data set connecting wines with their price, origin, location, designation,
+variety, reviews and more, this data exploration aims to first discover as a consumer where to find the best wines, how is the quality affected by location and 
+winery, but also to dig deeper into what makes up a good wine and what are the present correlations to better understand the fascinating world of wine production.
+
+The first initial questions that we will try to answer are:
+
+1. How does the quality of wine change according to its origin country?
+2. Which are the best wines according to quality and price? Where are they located?
+3. What words and designations are usually used to describe the best wines? 
+
+# Setup
+
+## Libraries
+
+The libraries used in this project are:
+
+- *futile.logger*: A logging library for clearer output,
+- *ggplot2*: The famous plotting library,
+- *dplyr*: The famour data manipulation library,
+- *maps* and *scales*: Used for map creations.
+
+```{r}
+
+# Packages
+library("futile.logger")
+library("ggplot2")
+library("dplyr", warn.conflicts = FALSE)
+library("scales")
+library("maps")
+
+```
+
+## Modules
+
+The project structure is split in 3 types of modules:
+
+- *plots*: Includes generic functions to print specific types of plots,
+- *questions*: Includes functions that contain the code for each question,
+- *utils*: Includes generic functions to perform common tasks on a dataset.
+
+```{r}
+
+# Plots
+source (file="./plots/histogram.R")
+source (file="./plots/map.R")
+source (file="./plots/pie.R")
+source (file="./plots/box.R")
+
+# Questions
+source (file="./questions/q1.R")
+
+# Utils
+source (file="./utils/clean.R")
+
+```
+
+# Exploration
+
+## Basics
+
+Let's first import the data from the *CSV* file, then utilize R's basic tools to get a first glance at the data. We will also hide
+the warnings for better readability.
+
+```{r}
+
+options(warn=-1)
+
+# Loading data
+flog.info('Loading data..')
+if (!exists("data.raw")) {
+    data.raw = read.csv("data_sets/wines/winemag-150k.csv")
+}
+
+# Info
+flog.info("%d rows loaded", nrow(data.raw))
+
+# Cleaning data
+data.clean = clean(data.raw)
+
+# Summary
+summary(data.clean)
+
+```
+
+This summary gives us basic information on this data set. A relevant element to note is that the points system used
+to rate the wines ranges from 80 to 100. We can therefore assume that relatively, a "*bad*" wine is given 80 points and a "*good*" wine is given 100 points.
+The prices on the other hand range from $4 to $2300, but the 3rd quartile indicates that only 25% of the prices are above $40. Finally, general insights for
+the countries and regions can be extracted, such as the United States being the most active wine producer with almost twice France's or Italy's production numbers.
+
+\newpage
+
+## Q1: How does the quality of wine change according to its origin country?
+
+Let's first take a look at the general production of wine world-wide. What are the top 10 countries producing the most wines? (see **./plots/histogram.R** 
+to see the code used to plot).
+
+```{r eval=FALSE}
+q1_best_10_production = function(dataset) {
+    data = dataset %>% 
+                group_by(country) %>% 
+                summarise(count = n()) %>% 
+                arrange(desc(count)) %>%
+                head(n = 10)
+    plotHistogram(data, "country", "count", "country", 
+        "Top 10 countries", "Wine producers", sorted = TRUE)
+}
+```
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+
+q1_best_10_production(data.clean)
+
+```
+
+From this histogram, it is clear that the United States are leader in terms of numbers of wine produced. This is to be expected
+from the size of the United States compared to countries like Italy or France. However, quantity does not imply quality. Let's
+get an overview of the 10 best countries in term of wine quality, using a mean of their scores. We will here only consider the top 10 countries 
+in term of production (> 3000 different wines):
+
+```{r eval=FALSE}
+q1_best_10_quality = function(dataset) {
+    data = dataset %>% 
+                group_by(country) %>% 
+                summarise(count = n(), average = mean(points)) %>%
+                filter(count >= 3000) %>%
+                arrange(desc(average)) %>%
+                head(n = 10)
+    plotHistogram(data, "country", "average", "country", "Top 10 countries", "Wine quality", 
+        sorted = TRUE, ylim = c(min(data$average), max(data$average)))
+}
+```
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+
+q1_best_10_quality(data.clean)
+
+```
+
+The leading trio is hence Austria, France and Italy. Before taking a deeper look into the leading countries quality-wise and understand
+exactly how their wine quality differ, let's take a more world-wide and visual view at the quality of wine using their mean scores 
+with a minimum of 10 produced wines (see **./plots/map.R** to see the code used to plot):
+
+```{r eval=FALSE}
+q1_worldwide_quality = function(dataset) {
+    data = dataset %>% 
+                group_by(country) %>% 
+                summarise(count = n(), average = mean(points)) %>%
+                filter(count >= 10)
+    plotMap(data, "country", "average", "World-wide wine quality", *
+        "Based on rankings from 80 to 100")
+    plotMap(data, "country", "average", "Europe wine quality", 
+        "Based on rankings from 80 to 100", type = "europe")
+}
+```
+
+```{r fig.height = 4.4}
+
+q1_worldwide_quality(data.clean)
+
+```
+
+Let's now take a deeper look at the top 10 countries quality-wise and understand exactly how they differ and which 
+of those is actually the "best wine country".
+
+```{r}
+countries.best = data.clean %>%
+                group_by(country) %>% 
+                summarise(count = n(), average = mean(points)) %>%
+                filter(count >= 3000) %>%
+                arrange(desc(average)) %>%
+                head(n = 10) %>%
+                pull(country)
+data.best = data.clean %>% filter(country %in% countries.best)
+```
+
+In this 10 countries, the number of wines produced for each can highly vary. This variation in production
+can biase the average and hence must be considered to determine the best wine countries. We can first
+take a look at the repartition of the total produced wine from these 10 countries:
+
+```{r eval=FALSE}
+q1_best_10_production_repartition = function(dataset) {
+    total = nrow(dataset)
+    data = dataset %>%
+                group_by(country) %>% 
+                summarise(count = n(), percentage = count / total)
+    plotPie(data, "country", "count", "Production repartition", "Top 10 wine countries")
+}
+```
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+
+q1_best_10_production_repartition(data.best)
+
+```
+
+This pie chart shows how the US, France and Italy dominates in terms of production numbers. Comparing
+these numbers raises questions regarding the general quality of a country. For example, Austria's wine quality mean
+is superior to France's, but it is clear here that France produces a lot more wine than Austria, which country is actually better?
+This will require to look at how the data spreads, the quartiles and variations of each country.
+
+```{r eval=FALSE}
+q1_best_10_data_spread = function(dataset) {
+    plotBox(dataset, "country", "points", "Top 10 countries", "Data variations")
+}
+```
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+q1_best_10_data_spread(data.best)
+```
+
+Many insights can be taken from this graph. Let's focus on the three best candidates to be the best wine country: Austria, France, Italy and US.
+These three countries have very close data, especially Austria and France with almost identical medians and very close means. 
+We can first however notice that France, with a lot more wines, still present a range box just a little bigger than Austria's. That indicates
+that even though France has a lot more wines, their scores are narrowly centered around it's median and mean, which implies a good quality for 
+so many different wines. France and Italy also present more outliers, especially with Italy that shows a very concentrated data spread (however lower) 
+with some very good wines and a bit less of very bad wines compare to its mean. The United State, with a lower mean and median,
+still present very good wines. Its range box is however wider than the other three top countries, which indicates a less consistent
+wine quality. While this graph gives interesting insights regarding the spread of the data, it is not enough to distinguish the best wine country.
+
+To conclude on the variation of wine quality according to its origin, let's take a look at the 30 best wines in the world and their origin:
+
+```{r eval=FALSE}
+q1_best_30_wines = function(dataset) {
+    wines.best = dataset %>%
+                arrange(desc(points)) %>%
+                head(n = 30) %>%
+                group_by(country) %>%
+                summarise(count = n())
+    plotHistogram(wines.best, "country", "count", "country", 
+        "Top 30 wines", "Countries repartition", sorted = TRUE)
+}
+```
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+q1_best_30_wines(data.clean)
+```
+
+This shows that the United States seem to produce the largest amount of excellent wines. Austria is here discarded from the top
+countries. The past results have shown that countries present many complex factors influencing wine quality, making
+it hard to distinguish one absolute leader in terms of quality. The term of "best wine"
+is of course subjective and might be influenced also by the price, but here we focused only on the scores. 
+If distinguishing countries appears like unconsistent research, then let's focus on a more narrow study, introducing a new question: 
+**Question 4: Which are the best wineries in the world?**
