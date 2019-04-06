@@ -1,16 +1,15 @@
-plotHistogram = function(dataset, discrete, continuous, fill, title, subtitle, sorted = FALSE, percentage = FALSE, ylim = FALSE) {
-    histogram = histogram(dataset, discrete, continuous, fill, title, sorted, percentage) +
-        labs(x = discrete, y = continuous, title = title, subtitle = subtitle) +
-        theme_bw() 
-    histogram = if (percentage) histogram else histogram + theme(legend.position="none")
-    histogram = if (ylim) histogram + coord_cartesian(ylim = ylim) else histogram
-    plot(histogram)
+plotHistogram = function(dataset, discrete, continuous, fill, title, subtitle, sorted = FALSE, ylim = FALSE) {
+    h = histogram(dataset, discrete, continuous, fill, title, subtitle, sorted, ylim)
+    plot(h)
 }
 
-histogram = function(dataset, discrete, continuous, fill, title, sorted, percentage) {
+histogram = function(dataset, discrete, continuous, fill, title, subtitle, sorted = FALSE, ylim = FALSE) {
     h = if (sorted == TRUE) sortedHistogram(dataset, discrete, continuous, fill) else unsortedHistogram(dataset, discrete, continuous, fill)
-    bar = if (percentage) geom_bar(position = "fill", stat = "identity") else geom_bar(stat = "identity")
-    histogram = h + bar
+    histogram = h +
+        geom_bar(stat = "identity") + 
+        labs(x = discrete, y = continuous, title = title, subtitle = subtitle) +
+        theme_bw() 
+    histogram = if (ylim) histogram + coord_cartesian(ylim = ylim) else histogram
     return (histogram)
 }
 

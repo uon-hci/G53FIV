@@ -1,5 +1,13 @@
 # Cleaning dataset
 clean = function(dataset) {
-    no_duplicates = distinct(dataset)
-    return (no_duplicates)
+    cleaned = dataset %>% select(-X) %>% distinct()
+    return (cleaned)
+}
+
+removeNa = function(dataset, column = FALSE) {
+    if (column != FALSE) {
+        return (dataset %>% filter(!is.na(!!sym(column))))
+    } else {
+        return (dataset %>% na.omit())
+    }
 }

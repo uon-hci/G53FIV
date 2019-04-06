@@ -15,7 +15,7 @@ winery, but also to dig deeper into what makes up a good wine and what are the p
 The first initial questions that we will try to answer are:
 
 1. How does the quality of wine change according to its origin country?
-2. Which are the best wines according to quality and price? Where are they located?
+2. What is the relation between quality and price? 
 3. What words and designations are usually used to describe the best wines? 
 
 # Setup
@@ -42,10 +42,9 @@ library("maps")
 
 ## Modules
 
-The project structure is split in 3 types of modules:
+The project structure is split in 2 types of modules:
 
 - *plots*: Includes generic functions to print specific types of plots,
-- *questions*: Includes functions that contain the code for each question,
 - *utils*: Includes generic functions to perform common tasks on a dataset.
 
 ```{r}
@@ -55,9 +54,7 @@ source (file="./plots/histogram.R")
 source (file="./plots/map.R")
 source (file="./plots/pie.R")
 source (file="./plots/box.R")
-
-# Questions
-source (file="./questions/q1.R")
+source (file="./plots/point.R")
 
 # Utils
 source (file="./utils/clean.R")
@@ -93,7 +90,7 @@ summary(data.clean)
 ```
 
 This summary gives us basic information on this data set. A relevant element to note is that the points system used
-to rate the wines ranges from 80 to 100. We can therefore assume that relatively, a "*bad*" wine is given 80 points and a "*good*" wine is given 100 points.
+to rate the wines ranges from 80 to 100. We can therefore assume that relatively, a "*worst*" wine is given 80 points and a "*best*" wine is given 100 points.
 The prices on the other hand range from $4 to $2300, but the 3rd quartile indicates that only 25% of the prices are above $40. Finally, general insights for
 the countries and regions can be extracted, such as the United States being the most active wine producer with almost twice France's or Italy's production numbers.
 
@@ -101,76 +98,36 @@ the countries and regions can be extracted, such as the United States being the 
 
 ## Q1: How does the quality of wine change according to its origin country?
 
-Let's first take a look at the general production of wine world-wide. What are the top 10 countries producing the most wines? (see **./plots/histogram.R** 
-to see the code used to plot).
-
-```{r eval=FALSE}
-q1_best_10_production = function(dataset) {
-    data = dataset %>% 
-                group_by(country) %>% 
-                summarise(count = n()) %>% 
-                arrange(desc(count)) %>%
-                head(n = 10)
-    plotHistogram(data, "country", "count", "country", 
-        "Top 10 countries", "Wine producers", sorted = TRUE)
-}
-```
+Let's first get an overview of the 10 best countries in term of wine quality, using a mean of their scores. 
 
 ```{r fig.height = 3, fig.width = 7, fig.align = "center"}
-
-q1_best_10_production(data.clean)
-
+data = data.clean %>% 
+            group_by(country) %>% 
+            summarise(count = n(), average = mean(points)) %>%
+            filter(count >= 3000) %>%
+            arrange(desc(average)) %>%
+            head(n = 10)
+plotHistogram(data, "country", "average", "country", "Top 10 countries", "Wine quality", 
+    sorted = TRUE, ylim = c(min(data$average), max(data$average)))
 ```
 
-From this histogram, it is clear that the United States are leader in terms of numbers of wine produced. This is to be expected
-from the size of the United States compared to countries like Italy or France. However, quantity does not imply quality. Let's
-get an overview of the 10 best countries in term of wine quality, using a mean of their scores. We will here only consider the top 10 countries 
-in term of production (> 3000 different wines):
-
-```{r eval=FALSE}
-q1_best_10_quality = function(dataset) {
-    data = dataset %>% 
-                group_by(country) %>% 
-                summarise(count = n(), average = mean(points)) %>%
-                filter(count >= 3000) %>%
-                arrange(desc(average)) %>%
-                head(n = 10)
-    plotHistogram(data, "country", "average", "country", "Top 10 countries", "Wine quality", 
-        sorted = TRUE, ylim = c(min(data$average), max(data$average)))
-}
-```
-
-```{r fig.height = 3, fig.width = 7, fig.align = "center"}
-
-q1_best_10_quality(data.clean)
-
-```
-
-The leading trio is hence Austria, France and Italy. Before taking a deeper look into the leading countries quality-wise and understand
+The leading trio is hence France and Italy and Portugal, with France leading. Before taking a deeper look into the leading countries quality-wise and understand
 exactly how their wine quality differ, let's take a more world-wide and visual view at the quality of wine using their mean scores 
 with a minimum of 10 produced wines (see **./plots/map.R** to see the code used to plot):
 
-```{r eval=FALSE}
-q1_worldwide_quality = function(dataset) {
-    data = dataset %>% 
-                group_by(country) %>% 
-                summarise(count = n(), average = mean(points)) %>%
-                filter(count >= 10)
-    plotMap(data, "country", "average", "World-wide wine quality", *
-        "Based on rankings from 80 to 100")
-    plotMap(data, "country", "average", "Europe wine quality", 
-        "Based on rankings from 80 to 100", type = "europe")
-}
+```{r fig.height = 4.2}
+data = data.clean %>% 
+            group_by(country) %>% 
+            summarise(count = n(), average = mean(points)) %>%
+            filter(count >= 10)
+plotMap(data, "country", "average", "World-wide wine quality", 
+    "Based on rankings from 80 to 100")
+plotMap(data, "country", "average", "Europe wine quality", 
+    "Based on rankings from 80 to 100", type = "europe")
 ```
 
-```{r fig.height = 4.4}
-
-q1_worldwide_quality(data.clean)
-
-```
-
-Let's now take a deeper look at the top 10 countries quality-wise and understand exactly how they differ and which 
-of those is actually the "best wine country".
+Let's now take a deeper look at the top 10 countries quality-wise (considering countries that have produced at least 3000 wines)
+ and understand exactly how they differ and which of those is actually the "best wine country".
 
 ```{r}
 countries.best = data.clean %>%
@@ -187,67 +144,148 @@ In this 10 countries, the number of wines produced for each can highly vary. Thi
 can biase the average and hence must be considered to determine the best wine countries. We can first
 take a look at the repartition of the total produced wine from these 10 countries:
 
-```{r eval=FALSE}
-q1_best_10_production_repartition = function(dataset) {
-    total = nrow(dataset)
-    data = dataset %>%
-                group_by(country) %>% 
-                summarise(count = n(), percentage = count / total)
-    plotPie(data, "country", "count", "Production repartition", "Top 10 wine countries")
-}
-```
 
 ```{r fig.height = 3, fig.width = 7, fig.align = "center"}
-
-q1_best_10_production_repartition(data.best)
-
+data = data.best %>%
+            group_by(country) %>% 
+            summarise(count = n())
+plotPie(data, "country", "count", "Production repartition", "Top 10 wine countries")
 ```
 
 This pie chart shows how the US, France and Italy dominates in terms of production numbers. Comparing
-these numbers raises questions regarding the general quality of a country. For example, Austria's wine quality mean
-is superior to France's, but it is clear here that France produces a lot more wine than Austria, which country is actually better?
+these numbers raises questions regarding the general quality of a country. For example, Portugals's wine quality mean
+is superior to US's, but it is clear here that the US produce a lot more wine than Portugal, which country is actually better?
 This will require to look at how the data spreads, the quartiles and variations of each country.
 
-```{r eval=FALSE}
-q1_best_10_data_spread = function(dataset) {
-    plotBox(dataset, "country", "points", "Top 10 countries", "Data variations")
-}
-```
-
 ```{r fig.height = 3, fig.width = 7, fig.align = "center"}
-q1_best_10_data_spread(data.best)
+plotBox(data.best, "country", "points", "Top 10 countries", "Data variations")
 ```
 
-Many insights can be taken from this graph. Let's focus on the three best candidates to be the best wine country: Austria, France, Italy and US.
-These three countries have very close data, especially Austria and France with almost identical medians and very close means. 
-We can first however notice that France, with a lot more wines, still present a range box just a little bigger than Austria's. That indicates
-that even though France has a lot more wines, their scores are narrowly centered around it's median and mean, which implies a good quality for 
-so many different wines. France and Italy also present more outliers, especially with Italy that shows a very concentrated data spread (however lower) 
-with some very good wines and a bit less of very bad wines compare to its mean. The United State, with a lower mean and median,
+Many insights can be taken from this graph. These top countries have very close data, with very close means and medians. 
+We can first however notice that France present a range bigger than Italy's. That indicates than even though France's average quality is superior,
+Italy has a more concentrated data spread, which means it has a more consistent wine quality. France however, with a less skewed median,
+shows a more even distribution of good and bad wines. The United State, with a lower mean and median,
 still present very good wines. Its range box is however wider than the other three top countries, which indicates a less consistent
 wine quality. While this graph gives interesting insights regarding the spread of the data, it is not enough to distinguish the best wine country.
+But the leading trio is France, Italy and the US.
 
 To conclude on the variation of wine quality according to its origin, let's take a look at the 30 best wines in the world and their origin:
 
-```{r eval=FALSE}
-q1_best_30_wines = function(dataset) {
-    wines.best = dataset %>%
-                arrange(desc(points)) %>%
-                head(n = 30) %>%
-                group_by(country) %>%
-                summarise(count = n())
-    plotHistogram(wines.best, "country", "count", "country", 
-        "Top 30 wines", "Countries repartition", sorted = TRUE)
-}
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data = data.clean %>%
+            arrange(desc(points)) %>%
+            head(n = 30) %>%
+            group_by(country) %>%
+            summarise(count = n())
+plotHistogram(data, "country", "count", "country", "Top 30 wines", "Countries repartition", sorted = TRUE)
 ```
+
+This shows that the United States seem to produce the largest amount of excellent wines. The past results have shown that countries present many 
+complex factors influencing wine quality, making it hard to distinguish one absolute leader in terms of quality. The term of "best wine"
+is of course subjective and might be influenced also by the price, but here we focused only on the scores. 
+If distinguishing countries appears like inconsistent research, then let's focus on a more narrow study, introducing a new question: 
+**Question 4: Which are the best wineries in the world?**
+
+
+## Q2: What is the relation between quality and price? 
+
+From the first question, we can assume that a "very good wine" is a wine with a score superior or equal to 95. 
+However the price of a wine is an important matter. Let's start by getting an overview of the prices, the average
+price, the lowest and cheapest, etc.
+
+First, because the dataset contains wines with no price, let's clean the data by removing these rows:
+
+```{r}
+data.prices = removeNa(data.clean, "price")
+```
+
+Let's take a look at a summary:
+
+```{r}
+summary(data.prices$price)
+```
+
+This summary shows that the average wine costs $33.66. The third quartile being only $40
+indicates that high priced wines (above $100) are a very small portion of the data. To get
+a first, more general and "down to earth" view of the wines prices variations, let's first focus
+on wines with a price inferior or equal to $100.
 
 ```{r fig.height = 3, fig.width = 7, fig.align = "center"}
-q1_best_30_wines(data.clean)
+p_mean = mean(data.prices$price)
+data.prices.noutlier = data.prices %>% filter(price <= 100)
+ggplot(data.prices.noutlier, aes(x = price)) +
+    geom_histogram(binwidth = 10, color = "#efa352", fill = "#efe553") +
+    geom_vline(aes(xintercept = p_mean), color = "#444444", linetype = "dashed", size = 1) +
+    labs(title = "Prices distribution", subtitle = "Wines under $100") +
+    theme_bw() +
+    scale_x_continuous(breaks = seq(0, 100, 10)) 
 ```
 
-This shows that the United States seem to produce the largest amount of excellent wines. Austria is here discarded from the top
-countries. The past results have shown that countries present many complex factors influencing wine quality, making
-it hard to distinguish one absolute leader in terms of quality. The term of "best wine"
-is of course subjective and might be influenced also by the price, but here we focused only on the scores. 
-If distinguishing countries appears like unconsistent research, then let's focus on a more narrow study, introducing a new question: 
-**Question 4: Which are the best wineries in the world?**
+We can see that most prices are between $10 and $30, and a smaller portion a more expensive with a range of $30 - $50.
+Before taking a specific look at the best wines and which of them have the best prices for their quality, let's look at how
+prices evolve according to quality. For a better visualization, the extreme outliers (> $1000) are not included here.
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+plotPoint(data.prices, "points", "price", "Evolution of price according to quality", 
+    "Wines under $1000", ylim = c(0, 1000))
+```
+
+This graph clearly shows how the price of wines from scores 80 - 90 (bad to middle quality wines) slighty increase. However,
+when wines start to approach scores close to 95, the prices significantly increase faster.
+
+Let's now focus on the the prices of the best wines (> 95 points). 
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.prices.best = data.prices %>% filter(points >= 95)
+plotBox(data.prices.best, "points", "price", "Price distribution", 
+    "Wines with a quality ranked in 95 - 100")
+```
+
+This graph shows how the prices are a lot more concentrated for wines of lesser quality (95 - 97) with outliers
+that also stay under a certain range. On the other hand, the best wines (98 - 100) have a less regular pricing
+and extreme outliers ($2300 for a 99 wine). It shows how these wines have a more "random" and "unjustified" pricing depending
+on special wines and occasions.
+
+Let's now take a deeper look at quartiles, again for each quality category from 95 to 100, and how they are distributed.
+We can assume the following: Q1 are cheap wines, Q2 are average prices wines, Q3 are expensive wines and Q4 are very expensive wines.
+
+```{r fig.height = 5, fig.width = 7, fig.align = "center"}
+cheap = data.prices.best %>% 
+        group_by(points) %>% 
+        summarise(price_category = "1: cheap", count = sum(price <= quantile(price)[2]))
+average = data.prices.best %>% 
+        group_by(points) %>% 
+        summarise(price_category = "2: average", 
+            count = sum(price > quantile(price)[2] & price <= quantile(price)[3]))
+expensive = data.prices.best %>% 
+            group_by(points) %>% 
+            summarise(price_category = "3: expensive", 
+                count = sum(price > quantile(price)[3] & price <= quantile(price)[4]))
+very_expensive = data.prices.best %>% 
+                group_by(points) %>% 
+                summarise(price_category = "4: very_expensive", 
+                    count = sum(price > quantile(price)[4]))
+data.prices.categories = rbind(cheap, average, expensive, very_expensive)
+
+h = histogram(data.prices.categories, "price_category", "count", "price_category", 
+        "Price categories", "For each quality range (95 - 100)") + 
+    facet_wrap(~ points, scale = "free") +
+    scale_fill_manual(
+        name = "Category", 
+        values = c("#6AA84F", "#4D9DE0", "#E15554", "#E1BC29"), 
+        labels = c("Cheap", "Average", "Expensive", "Very expensive")) +
+    xlab("Price category") +
+    theme(
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank())
+plot(h)
+```
+
+This plot shows that wines from the quality category 96 have a very good price distribution, where
+a decreasing number from cheap to very expensive. Qualities 95 to 97 are more accessible with a proportion 
+of cheap wines dominating, whereas qualities 98 - 100 seem to present more very expensive wines, especially 
+for wines of quality 99 and 100.
+
+With the fact that wines of quality 96 are a very interesting subset of the "best wines", a new question emerges: **Q5: Where can 
+be found the best wines for the best prices ? (Quality 96)**
