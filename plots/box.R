@@ -5,6 +5,6 @@ plotBox = function(dataset, discrete, continuous, title, subtitle, ylim = FALSE)
         labs(x = discrete, y = continuous, title = title, subtitle = subtitle) +
         theme_bw() +
         theme(legend.position="none") 
-    box = if (ylim) box + coord_cartesian(ylim = ylim) else box
+    box = if (ylim != FALSE) box + coord_cartesian(ylim = ylim) else box
     return (box)
 }

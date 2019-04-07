@@ -1,8 +1,11 @@
 ---
 title: "An exploration of the world's wines"
 author: "Andy Pagès"
-date: "2018-03-20"
-output: pdf_document
+date: '2018-03-20'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 ---
 
 # Introduction 
@@ -24,20 +27,17 @@ The first initial questions that we will try to answer are:
 
 The libraries used in this project are:
 
-- *futile.logger*: A logging library for clearer output,
-- *ggplot2*: The famous plotting library,
-- *dplyr*: The famour data manipulation library,
-- *maps* and *scales*: Used for map creations.
-
 ```{r}
-
 # Packages
 library("futile.logger")
 library("ggplot2")
 library("dplyr", warn.conflicts = FALSE)
 library("scales")
 library("maps")
-
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
 ```
 
 ## Modules
@@ -58,6 +58,7 @@ source (file="./plots/point.R")
 
 # Utils
 source (file="./utils/clean.R")
+source (file="./utils/text.R")
 
 ```
 
@@ -268,7 +269,7 @@ very_expensive = data.prices.best %>%
 data.prices.categories = rbind(cheap, average, expensive, very_expensive)
 
 h = histogram(data.prices.categories, "price_category", "count", "price_category", 
-        "Price categories", "For each quality range (95 - 100)") + 
+        "Price categories", "For each quality range (95 - 100)", legend = TRUE) + 
     facet_wrap(~ points, scale = "free") +
     scale_fill_manual(
         name = "Category", 
@@ -289,3 +290,191 @@ for wines of quality 99 and 100.
 
 With the fact that wines of quality 96 are a very interesting subset of the "best wines", a new question emerges: **Q5: Where can 
 be found the best wines for the best prices ? (Quality 96)**
+
+## Q3: What words and designations are usually used to describe the best wines?
+
+Each wine is described a few sentences. Let's use this and do some text mining to see what words are usually
+used to describe good wines.
+
+```{r fig.height = 5, fig.width = 7, fig.align = "center"}
+data.words = data.clean %>% filter(points >= 95)
+data.words.freq = get_words_frequencies(data.words$description, 
+    c("wine", "drink", "years", "now", "finish", "will", "shows", 
+    "vineyard", "just", "yet", "well", "fine", "flavors", "one", "notes", "made",
+    "best", "also", "even", "great", "like", "next", "mouth", 
+    "almost", "new", "fruit", "palate", "aromas"))
+data.words.freq = data.words.freq %>% filter(freq != 312)
+wordcloud(data.words.freq$word, data.words.freq$freq, min.freq = 1,
+          max.words=50, colors = brewer.pal(8, "Paired"))
+
+```
+
+Let's plot have a more precise view on what are the 10 words that are the most used to describe good wines:
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.freq.top10 = data.words.freq %>% head(n = 10)
+plotHistogram(data.freq.top10, "word", "freq", "word", 
+    "Top 10 description words", "For wines of a quality in 95 - 100", sorted = TRUE)
+```
+
+Those are therefore the words to look for when searching for a great wine. Let's take a quick look at the words
+that describe "bad" wines, that is wines with a quality equal or under 85:
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.words = data.clean %>% filter(points <= 85)
+data.words.freq = get_words_frequencies(data.words$description, 
+    c("wine", "drink", "years", "now", "finish", "will", "shows", 
+    "vineyard", "just", "yet", "well", "fine", "flavors", "one", "notes", "made",
+    "best", "also", "even", "great", "like", "next", "mouth", 
+    "almost", "new", "fruit", "palate", "aromas"))
+data.words.freq = data.words.freq %>% filter(freq != 312)
+data.freq.top10 = data.words.freq %>% head(n = 10)
+plotHistogram(data.freq.top10, "word", "freq", "word", 
+    "Top 10 description words", "For wines of a quality in 80 - 85", sorted = TRUE)
+```
+
+We can see that good wines are usually described with words like "tannins", "black", "ripe" or "oak", whereas 
+lesser wines are described with "cherry", "sweet", "dry" or "soft". This makes sense as very good and expensive
+wines are usually targeted at connaisseurs that look for very specific and rare tastes, whereas cheaper and more common
+wines are targeted to a more casual population, looking for simple and sweeter tastes.
+
+\newpage
+
+## Q4: Question 4: Which are the best wineries in the world?
+
+Let's first take a look a the 10 best wineries based on their average points, considering
+that they have produced at least 10 wines:
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.wineries = data.clean %>% 
+              group_by(winery, country) %>% 
+              summarise(count = n(), mean = mean(points)) %>% 
+              filter(count > 10) %>%
+              arrange(desc(mean))
+knitr::kable(head(data.wineries, 10), format = "markdown")
+```
+
+We can see here that France dominates with a majority of wineries present in the top 10. Of course,
+the US still seem to be bigger producers of wine. If we restrict the minimum number of produced wines to 50, we can cleary see that
+the US dominate:
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.wineries = data.clean %>% 
+              group_by(winery, country) %>% 
+              summarise(count = n(), mean = mean(points)) %>% 
+              filter(count > 50) %>%
+              arrange(desc(mean))
+knitr::kable(head(data.wineries, 10), format = "markdown")
+```
+
+Let's take a look a the distribution of the number of wines produced per wineries to get an idea
+of a minimum number to consider for the best winery:
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.wineries = data.clean %>% 
+              group_by(winery) %>% 
+              summarise(produced = n()) %>%
+              filter(produced >= 10 & produced <= 100)
+ggplot(data.wineries, aes(x = produced)) + 
+  geom_histogram(binwidth = 5, color = "#efa352", fill = "#efe553") +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(0, 100, 5))
+```
+
+This shows that most wineries produce around 10 and 30 wines.
+Because France, Italy and US again seem to be the leaders, let's extract for each of these countries the best
+winery with a minimum of 10 produces wines:
+
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.wineries = data.clean %>% 
+              group_by(winery, country) %>% 
+              summarise(count = n(), mean = mean(points)) %>% 
+              filter(count > 50)
+data.wineries.france = data.wineries %>%
+                      filter(country == "France") %>%
+                      arrange(desc(mean)) %>%
+                      head(1)
+data.wineries.italy = data.wineries %>%
+                      filter(country == "Italy") %>%
+                      arrange(desc(mean)) %>%
+                      head(1)
+data.wineries.us = data.wineries %>%
+                      filter(country == "US") %>%
+                      arrange(desc(mean)) %>%
+                      head(1)
+data.wineries.best = rbind(data.wineries.france, data.wineries.italy, data.wineries.us) %>%
+                    arrange(desc(mean))
+knitr::kable(data.wineries.best, format = "markdown")
+
+```
+
+These three wineries can hence be considered the best wineries in the word. Let's take a closer look at these wineries
+by comparing the varieties of wine they offer:
+
+```{r fig.height = 5, fig.width = 7, fig.align = "center"}
+wineries = data.wineries.best %>% pull(winery)
+data.wineries = data.clean %>% filter(winery %in% wineries)
+data.varieties = data.wineries %>%
+                group_by(winery, variety) %>%
+                summarise(count = n())
+h = histogram(data.varieties, "variety", "count", "winery",
+    "Most common varieties", "For the three best wineries", legend = TRUE, sorted = TRUE) +
+  coord_flip() + 
+  scale_fill_discrete(name = "Winery")
+plot(h)
+```
+
+## Q5: Where can be found the best wines for the best prices? (Quality 96)
+
+Knowing that wines of quality 96 represent the best category to find avantageous prices, let's plot on the world map
+the locations of such wines:
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.96 = data.clean %>% filter(!is.na(price)) %>% filter(points == 96)
+data.96.q1 = quantile(data.96$price)[2]
+data.96 = data.96 %>% filter(price <= data.96.q1)
+data.96.countries = data.96 %>%
+              group_by(country) %>%
+              summarise(count = n())
+plotPie(data.96.countries, "country", "count", "Amount of best/cheap wines", 
+        "Based on wines of quality 96")
+```
+
+It is hence obvious that the US are the place to find very good and cheap wines. Let's take a closer look at the US and see where
+exactly these advantageous wines can be found: 
+
+```{r fig.height = 3, fig.width = 7, fig.align = "center"}
+data.96.us = data.96 %>% filter(country == "US")
+data.96.us = data.96.us %>%
+            group_by(province) %>%
+            summarise(count = n()) %>%
+            mutate(province = tolower(province))
+plotMap(data.96.us, "province", "count", "USA's best/cheap wines repartition", 
+        "Based on wines of quality 96", type = "usa")
+```
+
+This map shows that the best place to find good wines at accessible price is the West coast of the United States, California in particular.
+
+## Conclusion
+
+During this data exploration we learned that:
+
+- France is the country producing the best wines in terms of quality, followed by Italy and Portugal,
+- The United States are the biggest producers of wine,
+- South America countries produce bad to average quality wines,
+- The leading trio in terms of quality and production numbers are France, Italy and the United States,
+- The United States produce more of the world's best wines,
+- The average price of a wine is $33.66,
+- Most wines are priced between \$10 and \$50,
+- The price increases alongside quality but higher quality wines (> 95) have a stronger price increase, reaching prices
+over $1000,
+- Higher quality wines have a less concentrated and regular price spread,
+- Wines ranked of quality 96 are the best candidates to find great wines at advantageous prices,
+- Good and expensive wines are described with words such as tannins, black, ripe, cabernet or oak,
+- Lesser and cheaper wines are described with words such as cherry, sweet, soft, dry and simple,
+- The best wineries (producing at least 10 wines) are located in France, Italy and the United States,
+- The best three wineries are Failla (US), Domaine Zind-Humbrecht (France) and Castello Banfi (Italy),
+- The most common varities found in the best wineries are Pinot Noir, Gewürztraminer, Pinot Gris, Sangiovese or Riesling,
+- The United States are the best place to find great wine at accessible price, especially in the West coast, California.
+
